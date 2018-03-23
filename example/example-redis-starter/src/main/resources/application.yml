@@ -1,0 +1,23 @@
+# redis
+redis:
+  host: 127.0.0.1
+  port: 6379
+  # 默认配置JedisPool
+  pool:
+    maxIdle: 8
+    minIdle: 0
+    maxActive: 8
+    maxWait: -1
+  # 配置sentinel后会配置JedisSentinelPool
+  # sentinel:
+    # master名称
+    # master: myMaster
+    # 备节点
+    # nodes:
+     # - 127.0.0.1: 6379
+     # - 127.0.0.2: 6379
+
+debug: true
+
+logging:
+  com.xinqing: debug
