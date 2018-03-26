@@ -4,6 +4,7 @@
 
 * [mongo starter](#mongo-starter)
 * [redis starter](#redis-starter)
+* [jwt starter](#jwt-starter)
 * [starter如何使用的demo](https://github.com/xuanbo/starter-parent/tree/master/example)
 
 ## mongo-starter
@@ -256,6 +257,98 @@ public class ApplicationTest {
         LOG.info("value: {}", value);
     }
 
+}
+```
+
+## jwt-starter
+
+> 采用io.jsonwebtoken.Jwts来做底层的jwt签名、解析
+
+### example
+
+* 添加配置
+
+```
+jwt:
+  # 过期毫秒
+  expire: 1000 * 60 * 60
+  # 加密字符串
+  secret: mysecret
+  # 签名算法 @see io.jsonwebtoken.SignatureAlgorithm
+  algorithm: HS256
+```
+
+* 生成jwt
+
+```
+@Validated
+@RestController
+public class LoginController {
+
+    @Autowired
+    private UserService userService;
+
+    @Autowired
+    private JwtService jwtService;
+
+    @PostMapping("/login")
+    public ResultVO<?> login(@Validated(UserLoginGroup.class) @RequestBody User user) {
+        if (userService.login(user)) {
+            // 登录成功生成jwt，这里可以把角色信息放入，例如roleId
+            Map<String, Object> claims = new HashMap<>();
+            claims.put("username", user.getUsername());
+            String token = jwtService.build(claims);
+            return ResultVO.ok(token);
+        }
+        return ResultVO.fail("用户名不存在或密码错误");
+    }
+
+}
+```
+
+* 解析jwt
+
+```
+@Component
+public class JwtAuthenticationFilter extends OncePerRequestFilter {
+
+    private static final Logger LOG = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
+
+    private static final PathMatcher matcher = new AntPathMatcher();
+
+    @Autowired
+    private JwtService jwtService;
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+            throws ServletException, IOException {
+        if(isProtected(request)) {
+            String token = request.getHeader("Authorization");
+            try {
+                // 检查jwt令牌, 如果令牌不合法或者过期, 里面会直接抛出异常, 下面的catch部分会直接返回
+                Claims claims = jwtService.parse(token);
+                // 下面可以将放入的用户相关信息取出，放入ThreadLocal，在业务中直接获取用户信息
+                String username = claims.get("username", String.class);
+            } catch (Exception e) {
+                LOG.warn("jwt parser exception", e);
+                // jwt验证不正确，错误处理
+                PrintWriter writer = response.getWriter();
+                writer.write(JSON.toJSONString(ResultVO.fail(CommonError.TOKEN_INVALID)));
+                writer.flush();
+                return;
+            }
+        }
+        // 如果jwt令牌通过了检测, 那么就把request传递给后面的RESTFul api
+        filterChain.doFilter(request, response);
+    }
+
+    private boolean isProtected(HttpServletRequest request) {
+        if (request.getMethod().equals(HttpMethod.OPTIONS.name())) {
+            LOG.debug("jwtFilter skip options request");
+            return false;
+        }
+        return matcher.match("/api/**", request.getServletPath());
+    }
 }
 ```
 
